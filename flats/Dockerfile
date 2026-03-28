@@ -20,4 +20,4 @@ RUN playwright install --with-deps chromium
 
 COPY . .
 
-CMD ["python", "run_all.py"]
+CMD ["python", "watcher.py"]
