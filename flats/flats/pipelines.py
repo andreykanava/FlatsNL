@@ -1,10 +1,8 @@
 import hashlib
-import os
 from datetime import datetime, timezone
 
 import requests
 from pymongo import MongoClient
-from pymongo.errors import DuplicateKeyError
 
 
 class FlatsPipeline:
@@ -13,6 +11,9 @@ class FlatsPipeline:
         self.mongo_db = mongo_db
         self.telegram_token = telegram_token
         self.telegram_chat_id = telegram_chat_id
+        self.client = None
+        self.db = None
+        self.col = None
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -28,7 +29,6 @@ class FlatsPipeline:
         self.db = self.client[self.mongo_db]
         self.col = self.db["listings"]
 
-        # уникальный индекс
         self.col.create_index("uid", unique=True)
         self.col.create_index([("source", 1), ("created_at", -1)])
         self.col.create_index([("city", 1), ("price", 1)])
@@ -36,7 +36,8 @@ class FlatsPipeline:
         spider.logger.info("Mongo pipeline started")
 
     def close_spider(self, spider):
-        self.client.close()
+        if self.client:
+            self.client.close()
         spider.logger.info("Mongo pipeline closed")
 
     def process_item(self, item, spider):
@@ -44,28 +45,46 @@ class FlatsPipeline:
         normalized = self.normalize_item(item)
 
         now = datetime.now(timezone.utc)
-        normalized["updated_at"] = now
 
-        try:
-            normalized["created_at"] = now
-            self.col.insert_one(normalized)
+        filter_doc = {"uid": normalized["uid"]}
+        update_doc = {
+            "$set": {
+                "source": normalized.get("source"),
+                "source_id": normalized.get("source_id"),
+                "url": normalized.get("url"),
+                "title": normalized.get("title"),
+                "street": normalized.get("street"),
+                "city": normalized.get("city"),
+                "district": normalized.get("district"),
+                "address": normalized.get("address"),
+                "price": normalized.get("price"),
+                "size": normalized.get("size"),
+                "rooms": normalized.get("rooms"),
+                "image": normalized.get("image"),
+                "availability": normalized.get("availability"),
+                "raw": normalized.get("raw"),
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "uid": normalized["uid"],
+                "created_at": now,
+            },
+        }
 
+        result = self.col.update_one(filter_doc, update_doc, upsert=True)
+
+        is_new = result.upserted_id is not None
+
+        if is_new:
             spider.logger.info("NEW listing saved: %s", normalized["uid"])
-            self.send_telegram_message(normalized)
 
-        except DuplicateKeyError:
-            self.col.update_one(
-                {"uid": normalized["uid"]},
-                {
-                    "$set": {
-                        **normalized,
-                        "updated_at": now,
-                    },
-                    "$setOnInsert": {
-                        "created_at": now,
-                    },
-                },
-            )
+            telegram_doc = {
+                **normalized,
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.send_telegram_message(telegram_doc)
+        else:
             spider.logger.info("Existing listing updated: %s", normalized["uid"])
 
         return item
@@ -102,7 +121,6 @@ class FlatsPipeline:
             base = f"{source}:{listing_id}"
         else:
             base = f"{source}:{url}"
-
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def pick_title(self, item):
@@ -162,7 +180,11 @@ class FlatsPipeline:
             "disable_web_page_preview": False,
         }
 
-        requests.post(url, json=payload, timeout=20)
+        try:
+            response = requests.post(url, json=payload, timeout=20)
+            response.raise_for_status()
+        except Exception:
+            pass
 
     def format_message(self, doc):
         raw = doc.get("raw", {})
@@ -178,7 +200,7 @@ class FlatsPipeline:
         url = doc.get("url")
 
         lines = [
-            f"🏠 <b>New listing</b>",
+            "🏠 <b>New listing</b>",
             f"<b>Source:</b> {self.escape(source)}",
             f"<b>Title:</b> {title}",
         ]
@@ -200,7 +222,6 @@ class FlatsPipeline:
         if availability:
             lines.append(f"<b>Availability:</b> {availability}")
 
-        # source-specific fields
         extra = []
 
         if source == "kamernet":
