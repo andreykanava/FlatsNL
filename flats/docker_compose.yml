@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: flats_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  scraper:
+    build: .
+    container_name: flats_scraper
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    env_file:
+      - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: housing
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: ["python", "run_all.py"]
+
+volumes:
+  mongo_data:

@@ -1,3 +1,5 @@
+import os
+
 # Scrapy settings for flats project
 #
 # For simplicity, this file contains only settings considered important or
@@ -114,8 +116,7 @@ ITEM_PIPELINES = {
     "flats.pipelines.FlatsPipeline": 300,
 }
 
-MONGO_URI = "mongodb://localhost:27017"
-MONGO_DATABASE = "housing"
-
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DATABASE = os.getenv("MONGO_DATABASE", "housing")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
