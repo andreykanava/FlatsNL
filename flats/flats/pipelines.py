@@ -4,6 +4,25 @@ from datetime import datetime, timezone
 import requests
 from pymongo import MongoClient
 
+def pretty_print_listing(self, data, is_new):
+    status = "🆕 NEW LISTING" if is_new else "♻️ UPDATED"
+
+    print("\n" + "=" * 60)
+    print(f"{status}")
+    print("=" * 60)
+
+    print(f"🏠 {data.get('title') or data.get('street')}")
+    print(f"📍 {data.get('city')} {data.get('district') or ''}")
+    print(f"💰 €{data.get('price')}")
+    print(f"📐 {data.get('size')} m² | 🛏 {data.get('rooms') or '-'}")
+
+    if data.get("availability"):
+        print(f"📅 {data.get('availability')}")
+
+    print(f"🔗 {data.get('url')}")
+    print(f"📦 source: {data.get('source')}")
+
+    print("=" * 60 + "\n")
 
 class FlatsPipeline:
     def __init__(self, mongo_uri, mongo_db, telegram_token, telegram_chat_id):
@@ -74,6 +93,8 @@ class FlatsPipeline:
         result = self.col.update_one(filter_doc, update_doc, upsert=True)
 
         is_new = result.upserted_id is not None
+
+        self.pretty_print_listing(normalized, is_new)
 
         if is_new:
             spider.logger.info("NEW listing saved: %s", normalized["uid"])
