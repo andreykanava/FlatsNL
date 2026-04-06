@@ -1,59 +1,102 @@
 import re
 import scrapy
 
-
 class ParariusSpider(scrapy.Spider):
     name = "pararius"
     allowed_domains = ["pararius.com"]
-    start_urls = ["https://www.pararius.com/apartments/enschede/studio"]
-    handle_httpstatus_list = [403, 429]
 
     custom_settings = {
-        "LOG_LEVEL": "INFO",
+        "ROBOTSTXT_OBEY": False,
+        "DOWNLOAD_DELAY": 2,
+        "CONCURRENT_REQUESTS": 1,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
+        "HTTPERROR_ALLOWED_CODES": [403],
+        # avoid br until brotli is installed
         "DEFAULT_REQUEST_HEADERS": {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate",
+            "Upgrade-Insecure-Requests": "1",
+        },
+        # let Playwright provide a browser UA more naturally
+        "USER_AGENT": None,
+        "PLAYWRIGHT_BROWSER_TYPE": "chromium",
+        "PLAYWRIGHT_LAUNCH_OPTIONS": {
+            "headless": True,
         },
     }
 
-    def parse(self, response):
+    async def start(self):
+        yield scrapy.Request(
+            url="https://www.pararius.com/apartments/enschede/studio",
+            callback=self.parse,
+            meta={
+                "playwright": True,
+                "playwright_include_page": True,
+            },
+            headers={
+                "Referer": "https://www.pararius.com/",
+            },
+        )
+
+    # optional backward compatibility for older Scrapy
+    def start_requests(self):
+        yield scrapy.Request(
+            url="https://www.pararius.com/apartments/enschede/studio",
+            callback=self.parse,
+            meta={
+                "playwright": True,
+                "playwright_include_page": True,
+            },
+            headers={
+                "Referer": "https://www.pararius.com/",
+            },
+        )
+
+    async def parse(self, response):
+        self.logger.info("STATUS = %s", response.status)
+
         if response.status == 403:
-            self.logger.warning("Access denied by Pararius: HTTP 403 for %s", response.url)
-            self.logger.warning("Response preview:\n%s", response.text[:1000])
+            self.logger.info("403 BODY PREVIEW:\n%s", response.text[:2000])
             return
 
-        if response.status == 429:
-            self.logger.warning("Rate limited by Pararius: HTTP 429 for %s", response.url)
-            return
+        page = response.meta["playwright_page"]
+
+        # give JS / anti-bot challenge time
+        await page.wait_for_timeout(5000)
+
+        html = await page.content()
+        await page.close()
+
+        response = response.replace(body=html)
 
         cards = response.css("li.search-list__item--listing section.listing-search-item")
+
         self.logger.info("Found %d cards", len(cards))
 
-        if not cards:
-            self.logger.warning("No listing cards found on %s", response.url)
-            self.logger.warning("Response preview:\n%s", response.text[:2000])
-            return
-
         for card in cards:
-            title = self.clean(card.css("h3.listing-search-item__title a::text").get())
+            title = card.css("h3.listing-search-item__title a::text").get()
+            title = title.strip() if title else None
+
             href = card.css("h3.listing-search-item__title a::attr(href)").get()
             url = response.urljoin(href) if href else None
 
-            subtitle = self.clean(card.css("div.listing-search-item__sub-title::text").get())
+            subtitle = card.css("div.listing-search-item__sub-title::text").get()
+            subtitle = subtitle.strip() if subtitle else None
 
-            price_raw = self.clean(card.css("span.listing-search-item__price-main::text").get())
-            price = self.parse_price(price_raw)
+            price_raw = card.css("span.listing-search-item__price-main::text").get()
+            price_raw = price_raw.strip() if price_raw else None
+            price = int(re.sub(r"[^\d]", "", price_raw)) if price_raw else None
 
-            features = [self.clean(x) for x in card.css("ul.illustrated-features li::text").getall()]
-            features = [x for x in features if x]
-
+            features = [x.strip() for x in card.css("ul.illustrated-features li::text").getall() if x.strip()]
             size = features[0] if len(features) > 0 else None
             rooms = features[1] if len(features) > 1 else None
             interior = features[2] if len(features) > 2 else None
 
-            landlord = self.clean(card.css("div.listing-search-item__info a::text").get())
+            landlord = card.css("div.listing-search-item__info a::text").get()
+            landlord = landlord.strip() if landlord else None
+
             image = card.css("a.listing-search-item__link--depiction img::attr(src)").get()
-            image = response.urljoin(image) if image else None
 
             yield {
                 "url": url,
@@ -67,17 +110,3 @@ class ParariusSpider(scrapy.Spider):
                 "image": image,
                 "source": "pararius",
             }
-
-    @staticmethod
-    def clean(value):
-        if value is None:
-            return None
-        value = re.sub(r"\s+", " ", value).strip()
-        return value or None
-
-    @staticmethod
-    def parse_price(value):
-        if not value:
-            return None
-        digits = re.sub(r"[^\d]", "", value)
-        return int(digits) if digits else None
