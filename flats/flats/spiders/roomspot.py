@@ -151,7 +151,6 @@ class RoomspotSpider(scrapy.Spider):
             item["rent_benefit"] = rent_benefit
             item["housemates"] = housemates
             item["selection_model"] = selection_model
-            item["reactions"] = reactions
             item["deadline"] = deadline
             item["source"] = "roomspot"
 
