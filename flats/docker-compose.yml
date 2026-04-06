@@ -5,10 +5,12 @@ services:
     image: mongo:7
     container_name: flats_mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: flats_admin
+      MONGO_INITDB_ROOT_PASSWORD: change_this_now_long_random_password
     volumes:
       - mongo_data:/data/db
+    command: ["mongod", "--auth", "--bind_ip_all"]
 
   scraper:
     build: .
@@ -19,7 +21,7 @@ services:
     env_file:
       - .env
     environment:
-      MONGO_URI: mongodb://mongo:27017
+      MONGO_URI: mongodb://flats_admin:change_this_now_long_random_password@mongo:27017/housing?authSource=admin
       MONGO_DATABASE: housing
       PYTHONUNBUFFERED: 1
     volumes:
