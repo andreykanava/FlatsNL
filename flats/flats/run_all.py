@@ -4,6 +4,7 @@ from scrapy.utils.project import get_project_settings
 from spiders.kamernet import KamernetSpider
 from spiders.pararius import ParariusSpider
 from spiders.roomspot import RoomspotSpider
+from spiders.huurwoningen import HuurwoningenSpider
 
 
 def main():
@@ -12,6 +13,7 @@ def main():
     process.crawl(KamernetSpider)
     process.crawl(ParariusSpider)
     process.crawl(RoomspotSpider)
+    process.crawl(HuurwoningenSpider)
 
     process.start()
 
