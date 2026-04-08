@@ -1,7 +1,7 @@
 import subprocess
 import time
 
-INTERVAL_SECONDS = 300
+INTERVAL_SECONDS = 10 * 60
 
 
 def run_cycle():
