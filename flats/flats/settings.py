@@ -137,5 +137,5 @@ REVERSE_PROXY_LIST = [
 PROXY_RETRY_HTTP_CODES = [403, 429, 500, 502, 503, 504]
 
 DOWNLOADER_MIDDLEWARES = {
-    "your_project.middlewares.FlatsDownloaderMiddleware": 543,
+    "flats.middlewares.FlatsDownloaderMiddleware": 543,
 }
