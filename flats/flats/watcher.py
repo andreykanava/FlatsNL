@@ -5,7 +5,7 @@ INTERVAL_SECONDS = 10 * 60
 
 
 def run_cycle():
-    result = subprocess.run(["python", "run_all.py"])
+    result = subprocess.run(["python", "flats/run_all.py"])
     return result.returncode
 
 
