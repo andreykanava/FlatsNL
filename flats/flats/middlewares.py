@@ -1,100 +1,105 @@
-# Define here the models for your spider middleware
-#
-# See documentation in:
-# https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-
 from scrapy import signals
-
-# useful for handling different item types with a single interface
-from itemadapter import ItemAdapter
-
-
-class FlatsSpiderMiddleware:
-    # Not all methods need to be defined. If a method is not defined,
-    # scrapy acts as if the spider middleware does not modify the
-    # passed objects.
-
-    @classmethod
-    def from_crawler(cls, crawler):
-        # This method is used by Scrapy to create your spiders.
-        s = cls()
-        crawler.signals.connect(s.spider_opened, signal=signals.spider_opened)
-        return s
-
-    def process_spider_input(self, response, spider):
-        # Called for each response that goes through the spider
-        # middleware and into the spider.
-
-        # Should return None or raise an exception.
-        return None
-
-    def process_spider_output(self, response, result, spider):
-        # Called with the results returned from the Spider, after
-        # it has processed the response.
-
-        # Must return an iterable of Request, or item objects.
-        for i in result:
-            yield i
-
-    def process_spider_exception(self, response, exception, spider):
-        # Called when a spider or process_spider_input() method
-        # (from other spider middleware) raises an exception.
-
-        # Should return either None or an iterable of Request or item objects.
-        pass
-
-    async def process_start(self, start):
-        # Called with an async iterator over the spider start() method or the
-        # matching method of an earlier spider middleware.
-        async for item_or_request in start:
-            yield item_or_request
-
-    def spider_opened(self, spider):
-        spider.logger.info("Spider opened: %s" % spider.name)
 
 
 class FlatsDownloaderMiddleware:
-    # Not all methods need to be defined. If a method is not defined,
-    # scrapy acts as if the downloader middleware does not modify the
-    # passed objects.
+    def __init__(self, proxy_list=None):
+        self.proxies = self.parse_proxy_list(proxy_list or [])
+        self.proxy_index = 0
 
     @classmethod
     def from_crawler(cls, crawler):
-        # This method is used by Scrapy to create your spiders.
-        s = cls()
+        s = cls(
+            proxy_list=crawler.settings.getlist("REVERSE_PROXY_LIST"),
+        )
         crawler.signals.connect(s.spider_opened, signal=signals.spider_opened)
         return s
 
     def process_request(self, request, spider):
-        # Called for each request that goes through the downloader
-        # middleware.
-
-        # Must either:
-        # - return None: continue processing this request
-        # - or return a Response object
-        # - or return a Request object
-        # - or raise IgnoreRequest: process_exception() methods of
-        #   installed downloader middleware will be called
         return None
 
     def process_response(self, request, response, spider):
-        # Called with the response returned from the downloader.
+        if response.status == 200:
+            return response
 
-        # Must either;
-        # - return a Response object
-        # - return a Request object
-        # - or raise IgnoreRequest
-        return response
+        retries = request.meta.get("proxy_retry_times", 0)
+        max_retries = len(self.proxies)
+
+        if retries >= max_retries or not self.proxies:
+            spider.logger.warning(
+                "Final failure for %s, status=%s, tried=%s/%s",
+                request.url,
+                response.status,
+                retries,
+                max_retries,
+            )
+            return response
+
+        proxy = self.get_next_proxy()
+        retry_req = request.copy()
+        retry_req.dont_filter = True
+        retry_req.meta["proxy"] = proxy
+        retry_req.meta["proxy_retry_times"] = retries + 1
+
+        spider.logger.warning(
+            "Status %s for %s. Retry via %s (%s/%s)",
+            response.status,
+            request.url,
+            proxy,
+            retries + 1,
+            max_retries,
+        )
+        return retry_req
 
     def process_exception(self, request, exception, spider):
-        # Called when a download handler or a process_request()
-        # (from other downloader middleware) raises an exception.
+        retries = request.meta.get("proxy_retry_times", 0)
+        max_retries = len(self.proxies)
 
-        # Must either:
-        # - return None: continue processing this exception
-        # - return a Response object: stops process_exception() chain
-        # - return a Request object: stops process_exception() chain
-        pass
+        if retries >= max_retries or not self.proxies:
+            spider.logger.warning(
+                "Exception for %s: %s. No proxies left.",
+                request.url,
+                exception,
+            )
+            return None
+
+        proxy = self.get_next_proxy()
+        retry_req = request.copy()
+        retry_req.dont_filter = True
+        retry_req.meta["proxy"] = proxy
+        retry_req.meta["proxy_retry_times"] = retries + 1
+
+        spider.logger.warning(
+            "Exception for %s: %s. Retry via %s (%s/%s)",
+            request.url,
+            exception,
+            proxy,
+            retries + 1,
+            max_retries,
+        )
+        return retry_req
+
+    def get_next_proxy(self):
+        proxy = self.proxies[self.proxy_index % len(self.proxies)]
+        self.proxy_index += 1
+        return proxy
+
+    def parse_proxy_list(self, proxy_list):
+        parsed = []
+
+        for raw in proxy_list:
+            raw = raw.strip()
+            if not raw:
+                continue
+
+            parts = raw.split(":")
+            if len(parts) == 4:
+                host, port, username, password = parts
+                parsed.append(f"http://{username}:{password}@{host}:{port}")
+            elif len(parts) == 2:
+                host, port = parts
+                parsed.append(f"http://{host}:{port}")
+
+        return parsed
 
     def spider_opened(self, spider):
-        spider.logger.info("Spider opened: %s" % spider.name)
+        spider.logger.info("Spider opened: %s", spider.name)

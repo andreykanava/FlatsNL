@@ -120,3 +120,22 @@ MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DATABASE = os.getenv("MONGO_DATABASE", "housing")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+REVERSE_PROXY_LIST = [
+    "31.59.20.176:6754:rgfnlqgi:o7nox6vyv70g",
+    "198.23.239.134:6540:rgfnlqgi:o7nox6vyv70g",
+    "45.38.107.97:6014:rgfnlqgi:o7nox6vyv70g",
+    "107.172.163.27:6543:rgfnlqgi:o7nox6vyv70g",
+    "198.105.121.200:6462:rgfnlqgi:o7nox6vyv70g",
+    "216.10.27.159:6837:rgfnlqgi:o7nox6vyv70g",
+    "142.111.67.146:5611:rgfnlqgi:o7nox6vyv70g",
+    "191.96.254.138:6185:rgfnlqgi:o7nox6vyv70g",
+    "31.58.9.4:6077:rgfnlqgi:o7nox6vyv70g",
+    "23.26.71.145:5628:rgfnlqgi:o7nox6vyv70g",
+]
+
+PROXY_RETRY_HTTP_CODES = [403, 429, 500, 502, 503, 504]
+
+DOWNLOADER_MIDDLEWARES = {
+    "your_project.middlewares.FlatsDownloaderMiddleware": 543,
+}
