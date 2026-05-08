@@ -239,7 +239,7 @@ class FlatsPipeline:
             if raw.get("landlord"):
                 extra.append(f"Landlord: {raw['landlord']}")
 
-        elif source == "roomspot":
+        elif source in {"roomspot", "plaza"}:
             if raw.get("dwelling_type"):
                 extra.append(f"Dwelling type: {raw['dwelling_type']}")
             if raw.get("floor"):
@@ -250,6 +250,8 @@ class FlatsPipeline:
                 extra.append(f"Housemates: {raw['housemates']}")
             if raw.get("selection_model"):
                 extra.append(f"Selection: {raw['selection_model']}")
+            if raw.get("labels"):
+                extra.append(f"Labels: {', '.join(raw['labels'])}")
             if raw.get("reactions") is not None:
                 extra.append(f"Reactions: {raw['reactions']}")
             if raw.get("deadline"):

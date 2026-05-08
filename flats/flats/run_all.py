@@ -5,6 +5,7 @@ from spiders.kamernet import KamernetSpider
 from spiders.pararius import ParariusSpider
 from spiders.roomspot import RoomspotSpider
 from spiders.huurwoningen import HuurwoningenSpider
+from spiders.plaza import PlazaSpider
 
 
 def main():
@@ -14,6 +15,7 @@ def main():
     process.crawl(ParariusSpider)
     process.crawl(RoomspotSpider)
     process.crawl(HuurwoningenSpider)
+    process.crawl(PlazaSpider)
 
     process.start()
 
